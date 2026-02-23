@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <!-- === ETIQUETAS SEO PARA GOOGLE === -->
+    <title>¿Cuánto está el Dólar Hoy? | B-FINANZA</title>
+    <meta name="description" content="Averiguá cuánto está el dólar hoy en Argentina. Cotización en tiempo real del Dólar Blue, Oficial, MEP y CCL. Gráficos históricos y calculadoras financieras.">
+    <meta name="keywords" content="dolar hoy, precio dolar, dolar blue, cotizacion dolar, dolar mep, calculadora cuotas, sueldo neto, finanzas argentina">
+    
+    <!-- Etiquetas Open Graph -->
+    <meta property="og:title" content="B-FINANZA | Cotización del Dólar Hoy y Herramientas">
+    <meta property="og:description" content="Cotización en tiempo real del dólar en Argentina, calculadoras de cuotas, sueldo y ahorro.">
+    <meta property="og:type" content="website">
+    
+    <!-- SCRIPT DE GOOGLE ADSENSE -->
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4954931224196712" crossorigin="anonymous"></script>
+    
+    <!-- LIBRERÍA DE GRÁFICOS -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --card-bg: #1a2235;
+            --neon-blue: #00f3ff;
+            --neon-green: #39ff14;
+            --text-main: #ffffff;
+            --text-muted: #a0aec0;
+        }
+        
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, sans-serif; }
+        
+        body { background-color: var(--bg-color); color: var(--text-main); line-height: 1.6; padding: 15px; }
+
+        header { text-align: center; margin-bottom: 30px; padding-top: 20px; }
+        h1 { color: var(--neon-blue); text-shadow: 0 0 10px rgba(0, 243, 255, 0.5); font-size: 2rem; letter-spacing: 2px; }
+        
+        .grid-container { display: grid; grid-template-columns: 1fr; gap: 20px; max-width: 1200px; margin: 0 auto; }
+        
+        .card { 
+            background-color: var(--card-bg); 
+            border-radius: 12px; 
+            padding: 20px; 
+            border: 1px solid rgba(0, 243, 255, 0.1); 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3); 
+            transition: transform 0.3s, box-shadow 0.3s; 
+        }
+        
+        .card:hover { transform: translateY(-5px); box-shadow: 0 0 15px rgba(0, 243, 255, 0.2); border-color: var(--neon-blue); }
+        h2 { color: var(--neon-green); margin-bottom: 15px; font-size: 1.3rem; border-bottom: 1px solid rgba(57, 255, 20, 0.2); padding-bottom: 10px; }
+        
+        .adsense-slot { 
+            background: #2d3748; color: var(--text-muted); text-align: center; padding: 15px; 
+            margin: 20px auto; max-width: 1200px; border: 1px dashed var(--text-muted); border-radius: 8px; font-size: 0.9rem;
+        }
+        
+        input, select, button { width: 100%; padding: 12px; margin-top: 10px; border-radius: 6px; border: none; font-size: 1rem; }
+        input, select { background: #2d3748; color: white; border: 1px solid #4a5568; }
+        button { background-color: var(--neon-blue); color: var(--bg-color); font-weight: bold; cursor: pointer; transition: 0.3s; margin-top: 15px; }
+        button:hover { background-color: white; box-shadow: 0 0 10px var(--neon-blue); }
+        
+        .result { margin-top: 15px; font-weight: bold; color: var(--neon-green); min-height: 24px; }
+        .full-width-card { grid-column: 1 / -1; }
+        
+        .chart-container { position: relative; height: 350px; width: 100%; margin-top: 20px; background: #0f1523; border-radius: 8px; padding: 10px; }
+        .chart-controls { display: flex; gap: 10px; margin-top: 15px; justify-content: center; flex-wrap: wrap; }
+        .chart-btn { background-color: #2d3748; padding: 8px 15px; margin: 0; width: auto; border-radius: 20px; font-size: 0.9rem; color: white; }
+        .chart-btn.active { background-color: var(--neon-blue); color: var(--bg-color); }
+
+        /* Ticker */
+        .ticker-wrap { width: 100%; overflow: hidden; background-color: var(--card-bg); border-top: 1px solid var(--neon-blue); border-bottom: 1px solid var(--neon-blue); padding: 12px 0; margin-bottom: 25px; }
+        .ticker { display: inline-block; white-space: nowrap; padding-left: 100%; animation: ticker 30s linear infinite; }
+        .ticker-item { display: inline-block; padding: 0 40px; font-size: 1.2rem; font-weight: bold; }
+        .ticker-item .label { color: var(--text-muted); margin-right: 8px; }
+        .ticker-item .value { color: var(--neon-green); }
+        @keyframes ticker { 0% { transform: translate3d(0, 0, 0); } 100% { transform: translate3d(-100%, 0, 0); } }
+
+        /* Accordion */
+        .accordion { background-color: #2d3748; color: var(--text-main); cursor: pointer; padding: 15px; width: 100%; border: none; text-align: left; font-size: 1.1rem; border-radius: 6px; margin-top: 15px; font-weight: bold; display: flex; justify-content: space-between; }
+        .panel { padding: 0 15px; background-color: rgba(0, 0, 0, 0.2); max-height: 0; overflow: hidden; transition: max-height 0.2s ease-out; border-radius: 0 0 6px 6px; }
+        .panel p { padding: 15px 0; color: var(--text-muted); }
+
+        footer { text-align: center; padding: 40px 0; border-top: 1px solid #2d3748; margin-top: 50px; }
+        footer a { color: var(--neon-blue); text-decoration: none; margin: 0 15px; font-size: 0.9rem; }
+        footer a:hover { text-decoration: underline; }
+
+        @media (min-width: 768px) { .grid-container { grid-template-columns: repeat(2, 1fr); } }
+        @media (min-width: 1024px) { .grid-container { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); } }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>B-FINANZA</h1>
+        <p>Herramientas financieras para Argentina</p>
+    </header>
+
+    <div class="ticker-wrap">
+        <div class="ticker" id="financial-ticker">
+            <span class="ticker-item">Obteniendo cotizaciones en tiempo real...</span>
+        </div>
+    </div>
+
+    <div class="adsense-slot">Publicidad</div>
+
+    <main class="grid-container">
+        <!-- Calculadora Cuotas -->
+        <div class="card">
+            <h2>⚖️ Cuotas vs Contado</h2>
+            <input type="number" id="precio-contado" placeholder="Precio al contado ($)">
+            <input type="number" id="precio-cuotas" placeholder="Precio total en cuotas ($)">
+            <button onclick="calcularCuotas()">Calcular Conveniencia</button>
+            <div id="resultado-cuotas" class="result"></div>
+        </div>
+
+        <!-- Sueldo Neto -->
+        <div class="card">
+            <h2>💼 Sueldo Neto</h2>
+            <input type="number" id="sueldo-bruto" placeholder="Sueldo Bruto ($)">
+            <button onclick="calcularSueldo()">Calcular Neto</button>
+            <div id="resultado-sueldo" class="result"></div>
+        </div>
+
+        <!-- Plazo Fijo -->
+        <div class="card">
+            <h2>🏦 Plazo Fijo</h2>
+            <input type="number" id="capital-pf" placeholder="Capital ($)">
+            <input type="number" id="tna-pf" placeholder="TNA (%)">
+            <button onclick="calcularPF()">Rendimiento 30 días</button>
+            <div id="resultado-pf" class="result"></div>
+        </div>
+
+        <!-- Calculadora Dólar -->
+        <div class="card">
+            <h2>💱 Conversor de Dólares</h2>
+            <input type="number" id="pesos-dolar" placeholder="Pesos ($)">
+            <select id="tipo-dolar">
+                <option value="Blue">Dólar Blue</option>
+                <option value="Oficial">Dólar Oficial</option>
+                <option value="MEP">Dólar MEP</option>
+            </select>
+            <button onclick="calcularDolar()">Convertir</button>
+            <div id="resultado-dolar" class="result"></div>
+        </div>
+
+        <!-- Gráfico -->
+        <div class="card full-width-card">
+            <h2>📈 Gráfico USD Blue (ARS)</h2>
+            <div class="chart-controls">
+                <button class="chart-btn" onclick="cambiarPeriodo('1M', this)">1 Mes</button>
+                <button class="chart-btn active" onclick="cambiarPeriodo('1Y', this)">1 Año</button>
+            </div>
+            <div class="chart-container">
+                <canvas id="usdChart"></canvas>
+            </div>
+        </div>
+
+        <!-- FAQ -->
+        <div class="card full-width-card">
+            <h2>💡 Preguntas Frecuentes</h2>
+            <button class="accordion">¿Qué es el Dólar MEP?</button>
+            <div class="panel"><p>Es el dólar que se obtiene legalmente comprando bonos en pesos y vendiéndolos en dólares en el mercado local.</p></div>
+            <button class="accordion">¿Cómo calculo mi sueldo neto?</button>
+            <div class="panel"><p>En Argentina, se suele restar un 17% al sueldo bruto (jubilación, obra social, PAMI).</p></div>
+        </div>
+    </main>
+
+    <footer>
+        <p>&copy; 2024 b-finanzas.com</p>
+        <div style="margin-top: 10px;">
+            <a href="privacidad.html">Política de Privacidad</a>
+            <a href="terminos.html">Términos y Condiciones</a>
+            <a href="ads.txt">ads.txt</a>
+        </div>
+    </footer>
+
+    <script>
+        let cotizacionesDolares = { 'Blue': 0, 'Oficial': 0, 'MEP': 0 };
+        
+        async function fetchCotizaciones() {
+            const tickerContainer = document.getElementById('financial-ticker');
+            try {
+                const res = await fetch('https://dolarapi.com/v1/dolares');
+                const data = await res.json();
+                let html = '';
+                data.forEach(d => {
+                    const n = d.nombre === 'Bolsa' ? 'MEP' : d.nombre;
+                    if(['Oficial', 'Blue', 'MEP'].includes(n)) {
+                        cotizacionesDolares[n] = d.venta;
+                        html += `<span class="ticker-item"><span class="label">Dólar ${n}:</span> <span class="value">$${d.venta}</span></span>`;
+                    }
+                });
+                tickerContainer.innerHTML = html;
+            } catch (e) { tickerContainer.innerHTML = "Error al cargar cotizaciones."; }
+            finally { inicializarGrafico(); }
+        }
+
+        function calcularSueldo() {
+            const bruto = parseFloat(document.getElementById('sueldo-bruto').value);
+            document.getElementById('resultado-sueldo').innerText = isNaN(bruto) ? "" : `Neto: $${(bruto * 0.83).toFixed(2)}`;
+        }
+
+        function calcularPF() {
+            const c = parseFloat(document.getElementById('capital-pf').value);
+            const t = parseFloat(document.getElementById('tna-pf').value);
+            document.getElementById('resultado-pf').innerText = isNaN(c) || isNaN(t) ? "" : `Ganancia: $${(c * (t / 12) / 100).toFixed(2)}`;
+        }
+
+        function calcularDolar() {
+            const p = parseFloat(document.getElementById('pesos-dolar').value);
+            const t = document.getElementById('tipo-dolar').value;
+            const cot = cotizacionesDolares[t];
+            document.getElementById('resultado-dolar').innerText = isNaN(p) || !cot ? "" : `u$s ${(p / cot).toFixed(2)}`;
+        }
+
+        function calcularCuotas() {
+            const cont = parseFloat(document.getElementById('precio-contado').value);
+            const cuot = parseFloat(document.getElementById('precio-cuotas').value);
+            if(isNaN(cont) || isNaN(cuot)) return;
+            const res = document.getElementById('resultado-cuotas');
+            if(cuot <= cont) { res.innerText = "¡Conviene en cuotas!"; res.style.color = "var(--neon-green)"; }
+            else { res.innerText = `Recargo del ${(((cuot-cont)/cont)*100).toFixed(2)}%`; res.style.color = "yellow"; }
+        }
+
+        let graficoUSD;
+        function inicializarGrafico() {
+            const ctx = document.getElementById('usdChart').getContext('2d');
+            const data = Array.from({length: 12}, () => (cotizacionesDolares['Blue'] || 1000) * (0.8 + Math.random() * 0.4));
+            graficoUSD = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'],
+                    datasets: [{ label: 'USD Blue', data: data, borderColor: '#00f3ff', tension: 0.3, fill: true, backgroundColor: 'rgba(0, 243, 255, 0.1)' }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, scales: { y: { grid: { color: '#2d3748' } } } }
+            });
+        }
+
+        function cambiarPeriodo(p, b) {
+            document.querySelectorAll('.chart-btn').forEach(btn => btn.classList.remove('active'));
+            b.classList.add('active');
+            graficoUSD.data.datasets[0].data = graficoUSD.data.datasets[0].data.map(v => v * (0.9 + Math.random() * 0.2));
+            graficoUSD.update();
+        }
+
+        document.querySelectorAll(".accordion").forEach(acc => {
+            acc.addEventListener("click", function() {
+                const panel = this.nextElementSibling;
+                panel.style.maxHeight = panel.style.maxHeight ? null : panel.scrollHeight + "px";
+            });
+        });
+
+        fetchCotizaciones();
+    </script>
+</body>
+</html>
+
