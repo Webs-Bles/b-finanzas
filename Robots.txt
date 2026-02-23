@@ -1,4 +1,0 @@
-User-agent: *
-Allow: /
-​Indica a Google dónde está tu mapa del sitio
-​Sitemap: https://www.google.com/search?q=https://b-finanzas.com/sitemap.xml
