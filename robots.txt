@@ -1,0 +1,8 @@
+Permitir que todos los buscadores rastreen el sitio
+​User-agent: *
+Allow: /
+​Instrucción específica para el robot de anuncios de Google
+​User-agent: Mediapartners-Google
+Allow: /
+​Ubicación del mapa del sitio para mejorar la indexación
+​Sitemap: https://www.google.com/search?q=https://b-finanzas.com/sitemap.xml
