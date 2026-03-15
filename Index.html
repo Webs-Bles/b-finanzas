@@ -1,0 +1,520 @@
+import React, { useState, useEffect } from 'react';
+import { 
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area
+} from 'recharts';
+import { 
+  TrendingUp, Wallet, Calculator, ArrowRightLeft, 
+  Info, ShieldCheck, Mail, Menu, X, BookOpen, 
+  ChevronRight, RefreshCw, Smartphone, Globe,
+  ArrowUpRight, ArrowDownLeft, Landmark, PieChart,
+  CreditCard, BarChart3, Receipt, HelpCircle, Clock,
+  Target, Percent, Coins, Zap, Scale, TrendingDown
+} from 'lucide-react';
+
+const App = () => {
+  const [activeTab, setActiveTab] = useState('home');
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState('--:--');
+  
+  // --- Estado de Tasas ---
+  const [rates, setRates] = useState({
+    blue: { compra: 1215, venta: 1235, variacion: "0.00%" },
+    mep: { compra: 1170, venta: 1180, variacion: "0.00%" },
+    oficial: { compra: 945, venta: 985, variacion: "0.00%" },
+    ccl: { compra: 1210, venta: 1230, variacion: "0.00%" }
+  });
+
+  const fetchLiveRates = async () => {
+    try {
+      const response = await fetch('https://dolarapi.com/v1/dolares');
+      if (!response.ok) throw new Error('API Error');
+      const data = await response.json();
+      const newRates = { ...rates };
+      if (Array.isArray(data)) {
+        data.forEach(d => {
+          let key = d.casa === 'bolsa' ? 'mep' : d.casa === 'contadoconliqui' ? 'ccl' : d.casa;
+          if (newRates[key]) {
+            newRates[key] = {
+              compra: d.compra || newRates[key].compra,
+              venta: d.venta || newRates[key].venta,
+              variacion: d.variacion ? (typeof d.variacion === 'string' ? d.variacion : d.variacion + "%") : "0.00%"
+            };
+          }
+        });
+      }
+      setRates(newRates);
+      setLastUpdated(new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }));
+      setLoading(false);
+    } catch (error) {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchLiveRates();
+    const interval = setInterval(fetchLiveRates, 300000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // --- Estados de Calculadoras ---
+  const [amount, setAmount] = useState("");
+  const [selectedType, setSelectedType] = useState('blue');
+  const [operation, setOperation] = useState('venta');
+  const [isUsdToArs, setIsUsdToArs] = useState(true);
+  
+  const [capital, setCapital] = useState("");
+  const [days, setDays] = useState("");
+  const [tna, setTna] = useState("");
+
+  const [price, setPrice] = useState("");
+  const [installments, setInstallments] = useState("");
+  const [tea, setTea] = useState("");
+
+  const [goalAmount, setGoalAmount] = useState("");
+  const [monthlyContribution, setMonthlyContribution] = useState("");
+
+  const [ivaAmount, setIvaAmount] = useState("");
+  const [ivaRate, setIvaRate] = useState(21);
+
+  const [inflAmount, setInflAmount] = useState("");
+  const [inflRate, setInflRate] = useState("");
+
+  // --- Datos de las Herramientas para el Catálogo ---
+  const toolsList = [
+    { id: 'dolar', name: 'Conversor Dólar', desc: 'Precios de Blue, MEP y Oficial con compra/venta en tiempo real.', icon: <ArrowRightLeft className="text-emerald-500" />, tab: 'home' },
+    { id: 'pf', name: 'Plazo Fijo', desc: 'Simula el rendimiento de tu inversión según la TNA vigente de los bancos.', icon: <Landmark className="text-blue-500" />, tab: 'tools' },
+    { id: 'cuotas', name: 'Costo de Cuotas', desc: 'Calcula el valor real de tus compras financiadas y el Costo Financiero Total.', icon: <CreditCard className="text-purple-500" />, tab: 'tools' },
+    { id: 'iva', name: 'Calculadora de IVA', desc: 'Obtén el IVA 21%, 10.5% o 27% de forma rápida para tus facturas.', icon: <Receipt className="text-orange-500" />, tab: 'tools' },
+    { id: 'infla', name: 'Poder Adquisitivo', desc: 'Calcula cuánto valor pierde tu dinero mes a mes frente a la inflación.', icon: <TrendingDown className="text-red-500" />, tab: 'tools' },
+    { id: 'ahorro', name: 'Metas de Ahorro', desc: '¿Cuánto tiempo necesitas para cumplir tu sueño? Planifica tu ahorro mensual.', icon: <Target className="text-cyan-500" />, tab: 'tools' },
+  ];
+
+  // Lógica de Cálculos
+  const calculateConversion = () => {
+    const numAmount = parseFloat(amount) || 0;
+    const rateObj = rates[selectedType] || rates.blue;
+    const currentRate = rateObj[operation] || 1;
+    if (numAmount === 0) return "0,00";
+    return isUsdToArs ? (numAmount * currentRate).toLocaleString('es-AR') : (numAmount / currentRate).toLocaleString('es-AR', { maximumFractionDigits: 2 });
+  };
+
+  const calculatePlazoFijo = () => {
+    const numCap = parseFloat(capital) || 0;
+    const numDays = parseFloat(days) || 0;
+    const numTna = parseFloat(tna) || 0;
+    const interest = (numCap * (numTna / 100) * numDays) / 365;
+    return {
+      interest: interest.toLocaleString('es-AR', { minimumFractionDigits: 2 }),
+      total: (numCap + interest).toLocaleString('es-AR', { minimumFractionDigits: 2 })
+    };
+  };
+
+  const calculateCuotas = () => {
+    const p = parseFloat(price) || 0;
+    const n = parseFloat(installments) || 1;
+    const i = (parseFloat(tea) || 0) / 100 / 12;
+    if (i === 0) return { monthly: (p/n).toLocaleString('es-AR'), total: p.toLocaleString('es-AR') };
+    const factor = (i * Math.pow(1 + i, n)) / (Math.pow(1 + i, n) - 1);
+    const m = p * factor;
+    return { monthly: m.toLocaleString('es-AR', { minimumFractionDigits: 2 }), total: (m * n).toLocaleString('es-AR', { minimumFractionDigits: 2 }) };
+  };
+
+  const scrollIntoView = (id) => {
+    setActiveTab('tools');
+    setTimeout(() => {
+      const el = document.getElementById(id);
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-50 font-sans text-slate-900 overflow-x-hidden">
+      
+      {/* 1. TICKER COMPRA/VENTA */}
+      <div className="bg-emerald-600 text-white py-2 overflow-hidden whitespace-nowrap border-b border-emerald-700 select-none relative z-[60]">
+        <div className="inline-block animate-marquee">
+          {Object.entries(rates).map(([key, val]) => (
+            <span key={key} className="inline-flex items-center mx-10 font-bold text-[10px] uppercase tracking-wider">
+              Dólar {key}: 
+              <span className="ml-2 text-emerald-100 opacity-60">C</span>
+              <span className="ml-1 bg-slate-900/20 px-1.5 rounded">${val.compra}</span>
+              <span className="ml-2 text-emerald-100 opacity-60">V</span>
+              <span className="ml-1 bg-slate-900/20 px-1.5 rounded">${val.venta}</span>
+            </span>
+          ))}
+          {Object.entries(rates).map(([key, val]) => (
+            <span key={`${key}-copy`} className="inline-flex items-center mx-10 font-bold text-[10px] uppercase tracking-wider">
+              Dólar {key}: <span className="ml-2 opacity-40">C</span> ${val.compra} <span className="ml-2 opacity-40">V</span> ${val.venta}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* 2. NAVBAR */}
+      <nav className="bg-slate-900 text-white sticky top-0 z-50 shadow-xl">
+        <div className="max-w-6xl mx-auto px-4 flex justify-between items-center h-16">
+          <div className="flex items-center space-x-2 cursor-pointer" onClick={() => setActiveTab('home')}>
+            <TrendingUp className="text-emerald-400" size={28} />
+            <span className="text-xl font-black tracking-tighter italic uppercase">B-FINANZA</span>
+          </div>
+          
+          <div className="hidden md:flex space-x-6 text-[10px] font-black uppercase tracking-[0.2em]">
+            <button onClick={() => setActiveTab('home')} className={activeTab === 'home' ? 'text-emerald-400' : 'text-slate-400 hover:text-white transition'}>Inicio</button>
+            <button onClick={() => setActiveTab('tools')} className={activeTab === 'tools' ? 'text-emerald-400' : 'text-slate-400 hover:text-white transition'}>Calculadoras</button>
+            <button onClick={() => setActiveTab('blog')} className={activeTab === 'blog' ? 'text-emerald-400' : 'text-slate-400 hover:text-white transition'}>Guías</button>
+          </div>
+
+          <button className="md:hidden p-2" onClick={() => setIsMenuOpen(!isMenuOpen)}>
+            {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
+          </button>
+        </div>
+        {isMenuOpen && (
+          <div className="md:hidden bg-slate-800 p-6 space-y-4 border-t border-slate-700">
+            <button onClick={() => {setActiveTab('home'); setIsMenuOpen(false);}} className="block w-full text-left font-black uppercase text-xs text-slate-300">Inicio</button>
+            <button onClick={() => {setActiveTab('tools'); setIsMenuOpen(false);}} className="block w-full text-left font-black uppercase text-xs text-slate-300">Herramientas</button>
+            <button onClick={() => {setActiveTab('blog'); setIsMenuOpen(false);}} className="block w-full text-left font-black uppercase text-xs text-slate-300">Guías</button>
+          </div>
+        )}
+      </nav>
+
+      <main className="max-w-6xl mx-auto px-4 py-8">
+        
+        {/* HEADER */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+          <div>
+            <h1 className="text-3xl font-black tracking-tighter uppercase italic text-slate-900">
+              {activeTab === 'home' ? 'Terminal de Inteligencia Financiera' : 'Herramientas de Análisis'}
+            </h1>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Argentina • Datos en tiempo real</p>
+          </div>
+          <div className="inline-flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-white px-4 py-2 rounded-full border border-slate-200 self-start">
+            <Clock size={12} className="text-emerald-500" /> {loading ? 'Sincronizando...' : `Live: ${lastUpdated} hs`}
+          </div>
+        </div>
+
+        {/* VISTA HOME */}
+        {activeTab === 'home' && (
+          <div className="space-y-12">
+            
+            {/* HERRAMIENTA PRINCIPAL (DÓLAR) */}
+            <section className="bg-white rounded-[2.5rem] p-8 md:p-10 shadow-sm border border-slate-200">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6">
+                <h2 className="text-2xl font-black flex items-center gap-2 uppercase italic tracking-tighter">
+                  <ArrowRightLeft className="text-emerald-500" /> Conversor Real
+                </h2>
+                <div className="flex bg-slate-100 p-1.5 rounded-2xl w-full md:w-auto">
+                  {['blue', 'mep', 'oficial'].map((t) => (
+                    <button key={t} onClick={() => setSelectedType(t)} className={`flex-1 md:flex-none px-6 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${selectedType === t ? 'bg-white text-emerald-600 shadow-sm scale-105' : 'text-slate-400'}`}>{t}</button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                <div className="space-y-6">
+                  <div className="flex gap-2 p-1 bg-slate-100 rounded-2xl">
+                    <button onClick={() => setOperation('compra')} className={`flex-1 py-3.5 rounded-2xl text-[10px] font-black transition-all flex items-center justify-center gap-2 ${operation === 'compra' ? 'bg-white text-emerald-600 shadow-md' : 'text-slate-400'}`}><ArrowDownLeft size={16}/> COMPRA</button>
+                    <button onClick={() => setOperation('venta')} className={`flex-1 py-3.5 rounded-2xl text-[10px] font-black transition-all flex items-center justify-center gap-2 ${operation === 'venta' ? 'bg-white text-emerald-600 shadow-md' : 'text-slate-400'}`}><ArrowUpRight size={16}/> VENTA</button>
+                  </div>
+
+                  <div className="relative group">
+                    <input 
+                      type="number" 
+                      value={amount} 
+                      onChange={(e) => setAmount(e.target.value)} 
+                      placeholder="Ingresar monto a convertir..."
+                      className="w-full text-4xl font-black p-6 bg-slate-50 border-2 border-transparent focus:border-emerald-500/20 outline-none transition-all rounded-[2rem] text-slate-800 placeholder:text-slate-200" 
+                    />
+                    <button onClick={() => setIsUsdToArs(!isUsdToArs)} className="absolute -bottom-5 right-10 bg-slate-900 text-white p-4 rounded-2xl border-4 border-white shadow-2xl hover:rotate-180 transition-all duration-700 active:scale-90"><RefreshCw size={24}/></button>
+                  </div>
+
+                  <div className="p-10 bg-slate-900 rounded-[2.5rem] text-white shadow-2xl">
+                    <p className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.3em] mb-4">Total en {isUsdToArs ? 'Pesos' : 'Dólares'}</p>
+                    <p className="text-4xl md:text-5xl font-black break-all">
+                      {isUsdToArs ? '$' : 'USD'} {calculateConversion()}
+                    </p>
+                    <p className="text-[10px] mt-6 font-bold text-slate-500 uppercase tracking-widest">Tasa aplicada: ${rates[selectedType][operation]}</p>
+                  </div>
+                </div>
+
+                <div className="bg-slate-50 rounded-[2rem] p-8 border border-slate-100 flex flex-col justify-center">
+                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-6 border-b border-slate-200 pb-4">Pizarra Live</h3>
+                  <div className="space-y-6">
+                    {Object.keys(rates).map((k) => (
+                      <div key={k} className="flex justify-between items-center group">
+                        <span className="text-xs font-black text-slate-500 uppercase tracking-tighter">Dólar {k}</span>
+                        <div className="flex gap-6">
+                          <div className="text-right">
+                            <p className="text-[8px] text-slate-400 font-bold mb-1 uppercase">C</p>
+                            <p className="text-sm font-black text-slate-800">${rates[k].compra}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-[8px] text-emerald-500 font-bold mb-1 uppercase">V</p>
+                            <p className="text-sm font-black text-emerald-600">${rates[k].venta}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* PANTALLAZO DE TODAS LAS CALCULADORAS (NUEVO) */}
+            <section className="space-y-8">
+              <div className="text-center md:text-left">
+                <h2 className="text-2xl font-black tracking-tighter uppercase italic flex items-center gap-2">
+                  <Zap className="text-amber-500" /> Central de Herramientas
+                </h2>
+                <p className="text-slate-500 text-sm mt-1">Todo lo que necesitas para gestionar tus finanzas en un solo lugar.</p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {toolsList.map((tool) => (
+                  <div 
+                    key={tool.id}
+                    onClick={() => scrollIntoView(tool.id)}
+                    className="group bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm hover:shadow-xl hover:border-emerald-500/20 transition-all cursor-pointer relative overflow-hidden"
+                  >
+                    <div className="absolute -right-4 -top-4 opacity-[0.05] group-hover:scale-150 transition-transform duration-700 pointer-events-none">
+                      {tool.icon}
+                    </div>
+                    <div className="mb-6 p-3 bg-slate-50 rounded-2xl w-fit group-hover:bg-emerald-50 transition-colors">
+                      {React.cloneElement(tool.icon, { size: 28 })}
+                    </div>
+                    <h3 className="text-xl font-black uppercase tracking-tighter italic mb-3 group-hover:text-emerald-600 transition-colors">
+                      {tool.name}
+                    </h3>
+                    <p className="text-slate-500 text-xs leading-relaxed font-medium mb-6">
+                      {tool.desc}
+                    </p>
+                    <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-emerald-500 group-hover:gap-4 transition-all">
+                      Usar herramienta <ChevronRight size={14} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          </div>
+        )}
+
+        {/* VISTA TOOLS */}
+        {activeTab === 'tools' && (
+          <div className="space-y-16 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
+            
+            {/* PLAZO FIJO */}
+            <section id="pf" className="bg-white rounded-[3rem] p-10 md:p-16 border border-slate-200 shadow-sm scroll-mt-24">
+               <div className="flex items-center gap-4 mb-10">
+                  <div className="p-5 bg-emerald-500 text-white rounded-[2rem] shadow-xl shadow-emerald-100">
+                    <Landmark size={32} />
+                  </div>
+                  <div>
+                    <h2 className="text-3xl font-black tracking-tighter uppercase italic">Simulador Plazo Fijo</h2>
+                    <p className="text-slate-400 font-bold text-[10px] uppercase tracking-widest">Calcula el interés de tus ahorros</p>
+                  </div>
+               </div>
+               <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-10">
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2 block">Inversión ($)</label>
+                    <input type="number" value={capital} onChange={(e) => setCapital(e.target.value)} placeholder="Ej: 100000" className="w-full p-6 bg-slate-50 rounded-[2rem] text-2xl font-black outline-none border-2 border-transparent focus:border-emerald-500 transition" />
+                  </div>
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2 block">Días</label>
+                    <input type="number" value={days} onChange={(e) => setDays(e.target.value)} placeholder="Ej: 30" className="w-full p-6 bg-slate-50 rounded-[2rem] text-2xl font-black outline-none border-2 border-transparent focus:border-emerald-500 transition" />
+                  </div>
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2 block">TNA %</label>
+                    <input type="number" value={tna} onChange={(e) => setTna(e.target.value)} placeholder="Ej: 38" className="w-full p-6 bg-slate-50 rounded-[2rem] text-2xl font-black outline-none border-2 border-transparent focus:border-emerald-500 transition" />
+                  </div>
+               </div>
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="p-8 bg-emerald-50 rounded-[2.5rem] border border-emerald-100">
+                    <span className="text-[10px] font-black text-emerald-600 uppercase block mb-2 tracking-widest">Ganancia Real</span>
+                    <p className="text-4xl font-black text-emerald-800">${calculatePlazoFijo().interest}</p>
+                  </div>
+                  <div className="p-8 bg-slate-900 rounded-[2.5rem] text-white shadow-xl shadow-slate-200">
+                    <span className="text-[10px] font-black text-slate-400 uppercase block mb-2 tracking-widest">Monto Final</span>
+                    <p className="text-4xl font-black">${calculatePlazoFijo().total}</p>
+                  </div>
+               </div>
+            </section>
+
+            {/* CUOTAS */}
+            <section id="cuotas" className="bg-white rounded-[3rem] p-10 md:p-16 border border-slate-200 shadow-sm scroll-mt-24">
+               <div className="flex items-center gap-4 mb-10">
+                  <div className="p-5 bg-blue-600 text-white rounded-[2rem] shadow-xl shadow-blue-100">
+                    <CreditCard size={32} />
+                  </div>
+                  <div>
+                    <h2 className="text-3xl font-black tracking-tighter uppercase italic">Costo de Cuotas</h2>
+                    <p className="text-slate-400 font-bold text-[10px] uppercase tracking-widest">Calcula el valor real a pagar</p>
+                  </div>
+               </div>
+               <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-10">
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2 block">Precio ($)</label>
+                    <input type="number" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="Ej: 50000" className="w-full p-6 bg-slate-50 rounded-[2rem] text-2xl font-black outline-none border-2 border-transparent focus:border-blue-500 transition" />
+                  </div>
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2 block">Cantidad Cuotas</label>
+                    <input type="number" value={installments} onChange={(e) => setInstallments(e.target.value)} placeholder="Ej: 6" className="w-full p-6 bg-slate-50 rounded-[2rem] text-2xl font-black outline-none border-2 border-transparent focus:border-blue-500 transition" />
+                  </div>
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2 block">TEA % Anual</label>
+                    <input type="number" value={tea} onChange={(e) => setTea(e.target.value)} placeholder="Ej: 75" className="w-full p-6 bg-slate-50 rounded-[2rem] text-2xl font-black outline-none border-2 border-transparent focus:border-blue-500 transition" />
+                  </div>
+               </div>
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-center md:text-left">
+                  <div className="p-8 bg-blue-50 rounded-[2.5rem] border border-blue-100">
+                    <span className="text-[10px] font-black text-blue-600 uppercase block mb-2 tracking-widest">Cuota Mensual</span>
+                    <p className="text-4xl font-black text-blue-800">${calculateCuotas().monthly}</p>
+                  </div>
+                  <div className="p-8 bg-slate-900 rounded-[2.5rem] text-white shadow-xl shadow-slate-200">
+                    <span className="text-[10px] font-black text-slate-400 uppercase block mb-2 tracking-widest">Costo Financiero Total</span>
+                    <p className="text-4xl font-black">${calculateCuotas().total}</p>
+                  </div>
+               </div>
+            </section>
+
+            {/* IVA */}
+            <section id="iva" className="bg-white rounded-[3rem] p-10 border border-slate-200 shadow-sm scroll-mt-24 max-w-2xl mx-auto w-full">
+              <div className="flex items-center gap-4 mb-8">
+                 <div className="p-4 bg-orange-100 text-orange-600 rounded-2xl"><Receipt size={28} /></div>
+                 <h2 className="text-2xl font-black tracking-tighter uppercase italic">IVA Rápido</h2>
+              </div>
+              <div className="space-y-6">
+                <input type="number" value={ivaAmount} onChange={(e) => setIvaAmount(e.target.value)} placeholder="Monto Neto ($)..." className="w-full p-6 bg-slate-50 rounded-[2rem] text-2xl font-black outline-none" />
+                <div className="flex gap-2">
+                  {[10.5, 21, 27].map(r => (
+                    <button key={r} onClick={() => setIvaRate(r)} className={`flex-1 py-3 rounded-2xl font-black text-xs border-2 transition ${ivaRate === r ? 'bg-orange-600 text-white border-orange-600' : 'bg-white text-slate-300 border-slate-100'}`}>{r}%</button>
+                  ))}
+                </div>
+                <div className="p-8 bg-orange-50 rounded-[2.5rem] border border-orange-100 text-center">
+                  <p className="text-[10px] font-black text-orange-600 uppercase mb-2">Total con IVA</p>
+                  <p className="text-4xl font-black text-orange-900">${( (parseFloat(ivaAmount)||0) * (1 + ivaRate/100) ).toLocaleString('es-AR')}</p>
+                </div>
+              </div>
+            </section>
+
+            {/* INFLACION */}
+            <section id="infla" className="bg-white rounded-[3rem] p-10 border border-slate-200 shadow-sm scroll-mt-24 max-w-2xl mx-auto w-full">
+              <div className="flex items-center gap-4 mb-8">
+                 <div className="p-4 bg-red-100 text-red-600 rounded-2xl"><TrendingDown size={28} /></div>
+                 <h2 className="text-2xl font-black tracking-tighter uppercase italic">Impacto Inflación</h2>
+              </div>
+              <div className="space-y-6">
+                <input type="number" value={inflAmount} onChange={(e) => setInflAmount(e.target.value)} placeholder="Monto a evaluar ($)..." className="w-full p-6 bg-slate-50 rounded-[2rem] text-2xl font-black outline-none" />
+                <input type="number" value={inflRate} onChange={(e) => setInflRate(e.target.value)} placeholder="Inflación Mensual Est. (%)..." className="w-full p-4 bg-slate-50 rounded-2xl text-xl font-black outline-none" />
+                <div className="p-8 bg-red-50 rounded-[2.5rem] border border-red-100 text-center">
+                  <p className="text-[10px] font-black text-red-600 uppercase mb-2 tracking-widest">Pérdida en 1 Mes</p>
+                  <p className="text-4xl font-black text-red-900">-${( (parseFloat(inflAmount)||0) * ((parseFloat(inflRate)||0)/100) ).toLocaleString('es-AR')}</p>
+                </div>
+              </div>
+            </section>
+
+            {/* METAS */}
+            <section id="ahorro" className="bg-white rounded-[3rem] p-10 border border-slate-200 shadow-sm scroll-mt-24 max-w-2xl mx-auto w-full">
+              <div className="flex items-center gap-4 mb-8">
+                 <div className="p-4 bg-cyan-100 text-cyan-600 rounded-2xl"><Target size={28} /></div>
+                 <h2 className="text-2xl font-black tracking-tighter uppercase italic">Meta de Ahorro</h2>
+              </div>
+              <div className="space-y-6">
+                <input type="number" value={goalAmount} onChange={(e) => setGoalAmount(e.target.value)} placeholder="Monto del Objetivo ($)..." className="w-full p-6 bg-slate-50 rounded-[2rem] text-2xl font-black outline-none" />
+                <input type="number" value={monthlyContribution} onChange={(e) => setMonthlyContribution(e.target.value)} placeholder="Ahorro Mensual Sugerido ($)..." className="w-full p-4 bg-slate-50 rounded-2xl text-xl font-black outline-none" />
+                <div className="p-8 bg-slate-900 rounded-[2.5rem] text-white text-center shadow-xl shadow-cyan-100/20">
+                  <p className="text-[10px] font-black text-cyan-400 uppercase mb-2 tracking-widest">Tiempo de Espera</p>
+                  <p className="text-4xl font-black">{ (parseFloat(goalAmount)||0) / (parseFloat(monthlyContribution)||1) > 0 ? Math.ceil((parseFloat(goalAmount)||0) / (parseFloat(monthlyContribution)||1)) : 0 } <span className="text-lg opacity-50">Meses</span></p>
+                </div>
+              </div>
+            </section>
+
+          </div>
+        )}
+
+        {/* VISTA BLOG */}
+        {activeTab === 'blog' && (
+          <div className="max-w-4xl mx-auto py-12 space-y-12 animate-in fade-in duration-500 pb-20">
+             <h2 className="text-4xl font-black tracking-tighter uppercase italic text-slate-900 underline decoration-emerald-500 decoration-8 underline-offset-8 mb-12">Educación Financiera</h2>
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+               {[
+                 { t: '¿Plazo Fijo o Dólar MEP?', d: 'Comparamos las tasas reales frente a la devaluación mensual.', c: 'Inversión' },
+                 { t: 'Evita los Intereses de Tarjeta', d: 'Cómo usar nuestra calculadora de cuotas para no pagar de más.', c: 'Ahorro' },
+                 { t: 'Monotributo y Facturación', d: 'Guía básica para freelancers sobre el IVA y escalas de AFIP.', c: 'Impuestos' },
+                 { t: 'Fondo de Emergencia', d: 'Por qué necesitas una meta de ahorro y cómo empezar desde cero.', c: 'Estrategia' }
+               ].map((p, i) => (
+                 <article key={i} className="bg-white p-10 rounded-[3rem] border border-slate-200 hover:shadow-xl transition-all group cursor-pointer">
+                   <span className="text-[9px] font-black text-emerald-600 uppercase bg-emerald-50 px-4 py-1.5 rounded-full tracking-widest">{p.c}</span>
+                   <h3 className="text-2xl font-black mt-6 mb-4 group-hover:text-emerald-600 transition tracking-tighter italic uppercase">{p.t}</h3>
+                   <p className="text-slate-500 text-sm leading-relaxed mb-6">{p.d}</p>
+                   <button className="text-[10px] font-black uppercase tracking-widest flex items-center gap-2">Leer artículo completo <ChevronRight size={14}/></button>
+                 </article>
+               ))}
+             </div>
+          </div>
+        )}
+
+      </main>
+
+      {/* FOOTER */}
+      <footer className="bg-slate-900 text-white pt-20 pb-12 mt-20 border-t-8 border-emerald-500">
+        <div className="max-w-6xl mx-auto px-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-16 mb-16">
+             <div className="space-y-6">
+                <div className="flex items-center space-x-2">
+                  <TrendingUp className="text-emerald-400" />
+                  <span className="text-2xl font-black tracking-tighter uppercase italic underline decoration-emerald-500 decoration-4">B-FINANZA</span>
+                </div>
+                <p className="text-slate-500 text-[10px] font-black uppercase tracking-tighter leading-relaxed">
+                  Inteligencia financiera para Argentina. Datos en vivo, herramientas de precisión y guías educativas gratuitas.
+                </p>
+             </div>
+             <div>
+               <h5 className="font-black text-[10px] uppercase tracking-[0.3em] text-emerald-400 mb-8">Mapa del Sitio</h5>
+               <ul className="space-y-4 text-slate-500 font-black uppercase text-xs tracking-widest">
+                 <li onClick={() => setActiveTab('home')} className="cursor-pointer hover:text-white transition">Dashboard Mercado</li>
+                 <li onClick={() => setActiveTab('tools')} className="cursor-pointer hover:text-white transition">Todas las Calculadoras</li>
+                 <li onClick={() => setActiveTab('blog')} className="cursor-pointer hover:text-white transition">Educación</li>
+               </ul>
+             </div>
+             <div>
+               <h5 className="font-black text-[10px] uppercase tracking-[0.3em] text-emerald-400 mb-8">Transparencia</h5>
+               <ul className="space-y-4 text-slate-500 font-black uppercase text-xs tracking-widest">
+                 <li>Aviso de Riesgos</li>
+                 <li>Políticas de Privacidad</li>
+                 <li>hola@b-finanza.com</li>
+               </ul>
+             </div>
+          </div>
+          <div className="pt-8 border-t border-slate-800 text-center text-[9px] text-slate-700 font-black uppercase tracking-[0.5em]">
+            © {new Date().getFullYear()} B-FINANZA AR - SYNC LIVE - ARGENTINA
+          </div>
+        </div>
+      </footer>
+
+      <style>{`
+        @keyframes marquee {
+          0% { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+        .animate-marquee {
+          display: inline-block;
+          animation: marquee 35s linear infinite;
+        }
+        input::-webkit-outer-spin-button, input::-webkit-inner-spin-button {
+          -webkit-appearance: none;
+          margin: 0;
+        }
+        ::selection {
+          background: #10b981;
+          color: white;
+        }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+      `}</style>
+    </div>
+  );
+};
+
+export default App;
+
