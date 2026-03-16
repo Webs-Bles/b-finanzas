@@ -1,0 +1,648 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { 
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area
+} from 'recharts';
+import { 
+  TrendingUp, Wallet, Calculator, ArrowRightLeft, 
+  Info, ShieldCheck, Mail, Menu, X, BookOpen, 
+  ChevronRight, RefreshCw, Smartphone, Globe,
+  ArrowUpRight, ArrowDownLeft, Landmark, PieChart,
+  CreditCard, BarChart3, Receipt, HelpCircle, Clock,
+  Target, Percent, Coins, Zap, Scale, TrendingDown, FileText, Lock
+} from 'lucide-react';
+
+const App = () => {
+  const [activeTab, setActiveTab] = useState('home');
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState('--:--');
+  const [error, setError] = useState(null);
+  
+  // --- Scroll to top on tab change ---
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [activeTab]);
+
+  // --- Estado de Tasas ---
+  const [rates, setRates] = useState({
+    blue: { compra: 1215, venta: 1235, variacion: "0.00%" },
+    mep: { compra: 1170, venta: 1180, variacion: "0.00%" },
+    oficial: { compra: 945, venta: 985, variacion: "0.00%" },
+    ccl: { compra: 1210, venta: 1230, variacion: "0.00%" }
+  });
+
+  const fetchLiveRates = async (retryCount = 0) => {
+    try {
+      const response = await fetch('https://dolarapi.com/v1/dolares');
+      if (!response.ok) throw new Error('Error al conectar con la API');
+      const data = await response.json();
+      
+      const newRates = { ...rates };
+      if (Array.isArray(data)) {
+        data.forEach(d => {
+          let key = d.casa === 'bolsa' ? 'mep' : d.casa === 'contadoconliqui' ? 'ccl' : d.casa;
+          if (newRates[key]) {
+            newRates[key] = {
+              compra: d.compra || newRates[key].compra,
+              venta: d.venta || newRates[key].venta,
+              variacion: d.variacion ? (typeof d.variacion === 'string' ? d.variacion : d.variacion + "%") : "0.00%"
+            };
+          }
+        });
+      }
+      setRates(newRates);
+      setLastUpdated(new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }));
+      setLoading(false);
+      setError(null);
+    } catch (err) {
+      if (retryCount < 3) {
+        setTimeout(() => fetchLiveRates(retryCount + 1), 2000 * Math.pow(2, retryCount));
+      } else {
+        setError("No se pudieron actualizar los datos.");
+        setLoading(false);
+      }
+    }
+  };
+
+  useEffect(() => {
+    fetchLiveRates();
+    const interval = setInterval(fetchLiveRates, 300000); // 5 minutos
+    return () => clearInterval(interval);
+  }, []);
+
+  // --- Estados de Calculadoras ---
+  const [amount, setAmount] = useState("");
+  const [selectedType, setSelectedType] = useState('blue');
+  const [operation, setOperation] = useState('venta');
+  const [isUsdToArs, setIsUsdToArs] = useState(true);
+  
+  const [capital, setCapital] = useState("");
+  const [days, setDays] = useState("");
+  const [tna, setTna] = useState("");
+
+  const [price, setPrice] = useState("");
+  const [installments, setInstallments] = useState("");
+  const [tea, setTea] = useState("");
+
+  const [goalAmount, setGoalAmount] = useState("");
+  const [monthlyContribution, setMonthlyContribution] = useState("");
+
+  const [ivaAmount, setIvaAmount] = useState("");
+  const [ivaRate, setIvaRate] = useState(21);
+
+  const [inflAmount, setInflAmount] = useState("");
+  const [inflRate, setInflRate] = useState("");
+
+  // --- Lógica de Cálculos ---
+  const calculatedConversion = useMemo(() => {
+    const numAmount = parseFloat(amount) || 0;
+    const rateObj = rates[selectedType] || rates.blue;
+    const currentRate = rateObj[operation] || 1;
+    if (numAmount === 0) return "0,00";
+    return isUsdToArs 
+      ? (numAmount * currentRate).toLocaleString('es-AR') 
+      : (numAmount / currentRate).toLocaleString('es-AR', { maximumFractionDigits: 2 });
+  }, [amount, selectedType, operation, isUsdToArs, rates]);
+
+  const plazoFijoResult = useMemo(() => {
+    const numCap = parseFloat(capital) || 0;
+    const numDays = parseFloat(days) || 0;
+    const numTna = parseFloat(tna) || 0;
+    const interest = (numCap * (numTna / 100) * numDays) / 365;
+    return {
+      interest: interest.toLocaleString('es-AR', { minimumFractionDigits: 2 }),
+      total: (numCap + interest).toLocaleString('es-AR', { minimumFractionDigits: 2 })
+    };
+  }, [capital, days, tna]);
+
+  const cuotasResult = useMemo(() => {
+    const p = parseFloat(price) || 0;
+    const n = parseFloat(installments) || 1;
+    const i = (parseFloat(tea) || 0) / 100 / 12;
+    if (i === 0) return { monthly: (p/n).toLocaleString('es-AR'), total: p.toLocaleString('es-AR') };
+    const factor = (i * Math.pow(1 + i, n)) / (Math.pow(1 + i, n) - 1);
+    const m = p * factor;
+    return { 
+      monthly: m.toLocaleString('es-AR', { minimumFractionDigits: 2 }), 
+      total: (m * n).toLocaleString('es-AR', { minimumFractionDigits: 2 }) 
+    };
+  }, [price, installments, tea]);
+
+  const scrollIntoView = (id) => {
+    setActiveTab('tools');
+    setTimeout(() => {
+      const el = document.getElementById(id);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+  };
+
+  const toolsList = [
+    { id: 'dolar', name: 'Conversor Dólar', desc: 'Precios de Blue, MEP y Oficial en tiempo real.', icon: <ArrowRightLeft className="text-emerald-500" />, tab: 'home' },
+    { id: 'pf', name: 'Plazo Fijo', desc: 'Rendimiento de inversión según la TNA vigente.', icon: <Landmark className="text-blue-500" />, tab: 'tools' },
+    { id: 'cuotas', name: 'Costo de Cuotas', desc: 'Calcula el valor real y el Costo Financiero Total.', icon: <CreditCard className="text-purple-500" />, tab: 'tools' },
+    { id: 'iva', name: 'Calculadora de IVA', desc: 'IVA 21%, 10.5% o 27% para facturación rápida.', icon: <Receipt className="text-orange-500" />, tab: 'tools' },
+    { id: 'infla', name: 'Poder Adquisitivo', desc: 'Calcula cuánto valor pierde tu dinero por la inflación.', icon: <TrendingDown className="text-red-500" />, tab: 'tools' },
+    { id: 'ahorro', name: 'Metas de Ahorro', desc: 'Planifica tu ahorro mensual para cumplir metas.', icon: <Target className="text-cyan-500" />, tab: 'tools' },
+  ];
+
+  return (
+    <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
+      
+      {/* 1. TICKER SUPERIOR */}
+      <div className="bg-emerald-600 text-white py-2 overflow-hidden whitespace-nowrap border-b border-emerald-700 relative z-[60]">
+        <div className="inline-block animate-marquee-fast">
+          {[...Array(2)].map((_, i) => (
+            <React.Fragment key={i}>
+              {Object.entries(rates).map(([key, val]) => (
+                <span key={`${i}-${key}`} className="inline-flex items-center mx-8 font-bold text-[10px] uppercase tracking-wider">
+                  Dólar {key}: 
+                  <span className="ml-2 text-emerald-200 opacity-70">C</span>
+                  <span className="ml-1 bg-white/10 px-1.5 rounded">${val.compra}</span>
+                  <span className="ml-2 text-emerald-200 opacity-70">V</span>
+                  <span className="ml-1 bg-white/10 px-1.5 rounded">${val.venta}</span>
+                </span>
+              ))}
+            </React.Fragment>
+          ))}
+        </div>
+      </div>
+
+      {/* 2. NAVBAR */}
+      <nav className="bg-slate-900 text-white sticky top-0 z-50 shadow-xl">
+        <div className="max-w-6xl mx-auto px-4 flex justify-between items-center h-16">
+          <div className="flex items-center space-x-2 cursor-pointer" onClick={() => setActiveTab('home')}>
+            <TrendingUp className="text-emerald-400" size={28} />
+            <span className="text-xl font-black tracking-tighter italic uppercase">B-FINANZA</span>
+          </div>
+          
+          <div className="hidden md:flex space-x-8 text-[11px] font-black uppercase tracking-widest">
+            {['home', 'tools', 'blog'].map((tab) => (
+              <button 
+                key={tab}
+                onClick={() => setActiveTab(tab)} 
+                className={`transition-colors ${activeTab === tab ? 'text-emerald-400' : 'text-slate-400 hover:text-white'}`}
+              >
+                {tab === 'home' ? 'Inicio' : tab === 'tools' ? 'Calculadoras' : 'Guías'}
+              </button>
+            ))}
+          </div>
+
+          <button className="md:hidden p-2" onClick={() => setIsMenuOpen(!isMenuOpen)}>
+            {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
+          </button>
+        </div>
+        
+        {isMenuOpen && (
+          <div className="md:hidden bg-slate-800 p-6 space-y-4 border-t border-slate-700">
+            {['home', 'tools', 'blog', 'terms', 'privacy'].map((tab) => (
+              <button 
+                key={tab}
+                onClick={() => {setActiveTab(tab); setIsMenuOpen(false);}} 
+                className={`block w-full text-left font-black uppercase text-xs ${activeTab === tab ? 'text-emerald-400' : 'text-slate-300'}`}
+              >
+                {tab === 'home' ? 'Inicio' : tab === 'tools' ? 'Herramientas' : tab === 'blog' ? 'Guías' : tab === 'terms' ? 'Términos' : 'Privacidad'}
+              </button>
+            ))}
+          </div>
+        )}
+      </nav>
+
+      <main className="max-w-6xl mx-auto px-4 py-8">
+        
+        {/* HEADER DINÁMICO */}
+        {['home', 'tools', 'blog'].includes(activeTab) && (
+          <div className="flex flex-col md:flex-row md:items-center justify-between mb-10 gap-4">
+            <div>
+              <h1 className="text-3xl md:text-4xl font-black tracking-tighter uppercase italic text-slate-900">
+                {activeTab === 'home' ? 'Terminal de Mercado' : activeTab === 'tools' ? 'Central de Herramientas' : 'Academia Financiera'}
+              </h1>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">
+                Argentina • Actualización automática cada 5m
+              </p>
+            </div>
+            <div className="inline-flex items-center gap-3 text-[10px] font-black text-slate-500 uppercase tracking-widest bg-white px-5 py-2.5 rounded-full border border-slate-200 shadow-sm self-start">
+              <div className={`w-2 h-2 rounded-full ${loading ? 'bg-amber-400 animate-pulse' : 'bg-emerald-500'}`} />
+              {loading ? 'Sincronizando...' : error ? error : `Live: ${lastUpdated} hs`}
+            </div>
+          </div>
+        )}
+
+        {/* VISTA HOME */}
+        {activeTab === 'home' && (
+          <div className="space-y-12 animate-in fade-in slide-in-from-bottom-2 duration-500">
+            
+            {/* CONVERSOR PRINCIPAL */}
+            <section className="bg-white rounded-[2.5rem] p-6 md:p-10 shadow-sm border border-slate-200">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6">
+                <h2 className="text-2xl font-black flex items-center gap-2 uppercase italic tracking-tighter">
+                  <ArrowRightLeft className="text-emerald-500" /> Conversor Real-Time
+                </h2>
+                <div className="flex bg-slate-100 p-1.5 rounded-2xl w-full md:w-auto overflow-x-auto">
+                  {['blue', 'mep', 'oficial', 'ccl'].map((t) => (
+                    <button 
+                      key={t} 
+                      onClick={() => setSelectedType(t)} 
+                      className={`flex-1 md:flex-none px-6 py-2 rounded-xl text-[10px] font-black uppercase whitespace-nowrap transition-all ${selectedType === t ? 'bg-white text-emerald-600 shadow-sm scale-105' : 'text-slate-400'}`}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                <div className="space-y-6">
+                  <div className="flex gap-2 p-1 bg-slate-100 rounded-2xl">
+                    <button onClick={() => setOperation('compra')} className={`flex-1 py-3.5 rounded-2xl text-[10px] font-black transition-all flex items-center justify-center gap-2 ${operation === 'compra' ? 'bg-white text-emerald-600 shadow-md' : 'text-slate-400'}`}><ArrowDownLeft size={16}/> COMPRA</button>
+                    <button onClick={() => setOperation('venta')} className={`flex-1 py-3.5 rounded-2xl text-[10px] font-black transition-all flex items-center justify-center gap-2 ${operation === 'venta' ? 'bg-white text-emerald-600 shadow-md' : 'text-slate-400'}`}><ArrowUpRight size={16}/> VENTA</button>
+                  </div>
+
+                  <div className="relative group">
+                    <input 
+                      type="number" 
+                      value={amount} 
+                      onChange={(e) => setAmount(e.target.value)} 
+                      placeholder="Ingrese monto..."
+                      className="w-full text-4xl font-black p-8 bg-slate-50 border-2 border-transparent focus:border-emerald-500/20 outline-none transition-all rounded-[2rem] text-slate-800 placeholder:text-slate-200" 
+                    />
+                    <button 
+                      onClick={() => setIsUsdToArs(!isUsdToArs)} 
+                      className="absolute -bottom-5 right-10 bg-slate-900 text-white p-4 rounded-2xl border-4 border-white shadow-2xl hover:rotate-180 transition-all duration-500 active:scale-90"
+                    >
+                      <RefreshCw size={24}/>
+                    </button>
+                  </div>
+
+                  <div className="p-10 bg-slate-900 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform">
+                      {isUsdToArs ? <Coins size={80} /> : <Globe size={80} />}
+                    </div>
+                    <p className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.3em] mb-4">Total en {isUsdToArs ? 'Pesos' : 'Dólares'}</p>
+                    <p className="text-4xl md:text-5xl font-black break-all">
+                      {isUsdToArs ? '$ ' : 'USD '}{calculatedConversion}
+                    </p>
+                    <p className="text-[10px] mt-6 font-bold text-slate-500 uppercase tracking-widest">Tasa aplicada: ${rates[selectedType][operation]}</p>
+                  </div>
+                </div>
+
+                <div className="bg-slate-50 rounded-[2rem] p-8 border border-slate-100 flex flex-col justify-center">
+                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-6 border-b border-slate-200 pb-4">Tablero de Cotizaciones</h3>
+                  <div className="space-y-6">
+                    {Object.keys(rates).map((k) => (
+                      <div key={k} className="flex justify-between items-center group">
+                        <span className="text-xs font-black text-slate-600 uppercase tracking-tighter">Dólar {k}</span>
+                        <div className="flex gap-6">
+                          <div className="text-right">
+                            <p className="text-[8px] text-slate-400 font-bold mb-1 uppercase">Compra</p>
+                            <p className="text-sm font-black text-slate-800">${rates[k].compra}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-[8px] text-emerald-500 font-bold mb-1 uppercase">Venta</p>
+                            <p className="text-sm font-black text-emerald-600">${rates[k].venta}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* GRILLA DE HERRAMIENTAS RÁPIDAS */}
+            <section className="space-y-8">
+              <div className="flex items-end justify-between">
+                <div>
+                  <h2 className="text-2xl font-black tracking-tighter uppercase italic flex items-center gap-2">
+                    <Zap className="text-amber-500" /> Calculadoras Destacadas
+                  </h2>
+                  <p className="text-slate-500 text-sm mt-1 font-medium">Herramientas esenciales para el día a día en Argentina.</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {toolsList.map((tool) => (
+                  <div 
+                    key={tool.id}
+                    onClick={() => scrollIntoView(tool.id)}
+                    className="group bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm hover:shadow-xl hover:border-emerald-500/20 transition-all cursor-pointer relative overflow-hidden"
+                  >
+                    <div className="mb-6 p-4 bg-slate-50 rounded-2xl w-fit group-hover:bg-emerald-50 group-hover:scale-110 transition-all">
+                      {React.cloneElement(tool.icon, { size: 24 })}
+                    </div>
+                    <h3 className="text-xl font-black uppercase tracking-tighter italic mb-2 group-hover:text-emerald-600 transition-colors">
+                      {tool.name}
+                    </h3>
+                    <p className="text-slate-500 text-xs leading-relaxed font-medium mb-6">
+                      {tool.desc}
+                    </p>
+                    <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-emerald-500 group-hover:gap-4 transition-all">
+                      Abrir herramienta <ChevronRight size={14} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          </div>
+        )}
+
+        {/* VISTA HERRAMIENTAS */}
+        {activeTab === 'tools' && (
+          <div className="space-y-16 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
+            
+            {/* PLAZO FIJO */}
+            <section id="pf" className="bg-white rounded-[3rem] p-8 md:p-16 border border-slate-200 shadow-sm scroll-mt-24">
+               <div className="flex items-center gap-4 mb-10">
+                  <div className="p-5 bg-emerald-500 text-white rounded-[2rem] shadow-xl shadow-emerald-100">
+                    <Landmark size={32} />
+                  </div>
+                  <div>
+                    <h2 className="text-3xl font-black tracking-tighter uppercase italic">Simulador Plazo Fijo</h2>
+                    <p className="text-slate-400 font-bold text-[10px] uppercase tracking-widest">Calcula el interés de tus ahorros bancarios</p>
+                  </div>
+               </div>
+               <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-10">
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Capital a invertir ($)</label>
+                    <input type="number" value={capital} onChange={(e) => setCapital(e.target.value)} placeholder="Ej: 500000" className="w-full p-6 bg-slate-50 rounded-[2rem] text-2xl font-black outline-none border-2 border-transparent focus:border-emerald-500 transition" />
+                  </div>
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Plazo (Días)</label>
+                    <input type="number" value={days} onChange={(e) => setDays(e.target.value)} placeholder="Ej: 30" className="w-full p-6 bg-slate-50 rounded-[2rem] text-2xl font-black outline-none border-2 border-transparent focus:border-emerald-500 transition" />
+                  </div>
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">TNA % Anual</label>
+                    <input type="number" value={tna} onChange={(e) => setTna(e.target.value)} placeholder="Ej: 38" className="w-full p-6 bg-slate-50 rounded-[2rem] text-2xl font-black outline-none border-2 border-transparent focus:border-emerald-500 transition" />
+                  </div>
+               </div>
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="p-10 bg-emerald-50 rounded-[2.5rem] border border-emerald-100">
+                    <span className="text-[10px] font-black text-emerald-600 uppercase block mb-2 tracking-widest">Intereses Ganados</span>
+                    <p className="text-4xl font-black text-emerald-800">${plazoFijoResult.interest}</p>
+                  </div>
+                  <div className="p-10 bg-slate-900 rounded-[2.5rem] text-white shadow-xl shadow-slate-200">
+                    <span className="text-[10px] font-black text-slate-400 uppercase block mb-2 tracking-widest">Total al Vencimiento</span>
+                    <p className="text-4xl font-black">${plazoFijoResult.total}</p>
+                  </div>
+               </div>
+            </section>
+
+            {/* CUOTAS */}
+            <section id="cuotas" className="bg-white rounded-[3rem] p-8 md:p-16 border border-slate-200 shadow-sm scroll-mt-24">
+               <div className="flex items-center gap-4 mb-10">
+                  <div className="p-5 bg-blue-600 text-white rounded-[2rem] shadow-xl shadow-blue-100">
+                    <CreditCard size={32} />
+                  </div>
+                  <div>
+                    <h2 className="text-3xl font-black tracking-tighter uppercase italic">Costo de Cuotas (TEA)</h2>
+                    <p className="text-slate-400 font-bold text-[10px] uppercase tracking-widest">Calcula el precio final con financiación</p>
+                  </div>
+               </div>
+               <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-10">
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Precio de Lista ($)</label>
+                    <input type="number" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="Ej: 120000" className="w-full p-6 bg-slate-50 rounded-[2rem] text-2xl font-black outline-none border-2 border-transparent focus:border-blue-500 transition" />
+                  </div>
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Cuotas</label>
+                    <input type="number" value={installments} onChange={(e) => setInstallments(e.target.value)} placeholder="Ej: 12" className="w-full p-6 bg-slate-50 rounded-[2rem] text-2xl font-black outline-none border-2 border-transparent focus:border-blue-500 transition" />
+                  </div>
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">TEA % (Tasa Efectiva)</label>
+                    <input type="number" value={tea} onChange={(e) => setTea(e.target.value)} placeholder="Ej: 85" className="w-full p-6 bg-slate-50 rounded-[2rem] text-2xl font-black outline-none border-2 border-transparent focus:border-blue-500 transition" />
+                  </div>
+               </div>
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="p-10 bg-blue-50 rounded-[2.5rem] border border-blue-100">
+                    <span className="text-[10px] font-black text-blue-600 uppercase block mb-2 tracking-widest">Valor Cuota Mensual</span>
+                    <p className="text-4xl font-black text-blue-800">${cuotasResult.monthly}</p>
+                  </div>
+                  <div className="p-10 bg-slate-900 rounded-[2.5rem] text-white shadow-xl shadow-slate-200">
+                    <span className="text-[10px] font-black text-slate-400 uppercase block mb-2 tracking-widest">Total Financiado (CFT)</span>
+                    <p className="text-4xl font-black">${cuotasResult.total}</p>
+                  </div>
+               </div>
+            </section>
+
+            {/* IVA E INFLACION */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+               <section id="iva" className="bg-white rounded-[3rem] p-10 border border-slate-200 shadow-sm scroll-mt-24">
+                 <div className="flex items-center gap-4 mb-8">
+                    <div className="p-4 bg-orange-100 text-orange-600 rounded-2xl"><Receipt size={28} /></div>
+                    <h2 className="text-2xl font-black tracking-tighter uppercase italic">Cálculo de IVA</h2>
+                 </div>
+                 <div className="space-y-6">
+                   <input type="number" value={ivaAmount} onChange={(e) => setIvaAmount(e.target.value)} placeholder="Monto Neto ($)..." className="w-full p-6 bg-slate-50 rounded-[2rem] text-2xl font-black outline-none" />
+                   <div className="flex gap-2">
+                     {[10.5, 21, 27].map(r => (
+                       <button key={r} onClick={() => setIvaRate(r)} className={`flex-1 py-4 rounded-2xl font-black text-xs border-2 transition ${ivaRate === r ? 'bg-orange-600 text-white border-orange-600 shadow-lg' : 'bg-white text-slate-300 border-slate-100 hover:border-orange-200'}`}>{r}%</button>
+                     ))}
+                   </div>
+                   <div className="p-8 bg-orange-50 rounded-[2rem] border border-orange-100 text-center">
+                     <p className="text-[10px] font-black text-orange-600 uppercase mb-2">Total con IVA Incluido</p>
+                     <p className="text-4xl font-black text-orange-900">${( (parseFloat(ivaAmount)||0) * (1 + ivaRate/100) ).toLocaleString('es-AR')}</p>
+                   </div>
+                 </div>
+               </section>
+
+               <section id="infla" className="bg-white rounded-[3rem] p-10 border border-slate-200 shadow-sm scroll-mt-24">
+                 <div className="flex items-center gap-4 mb-8">
+                    <div className="p-4 bg-red-100 text-red-600 rounded-2xl"><TrendingDown size={28} /></div>
+                    <h2 className="text-2xl font-black tracking-tighter uppercase italic">Poder Adquisitivo</h2>
+                 </div>
+                 <div className="space-y-6">
+                   <input type="number" value={inflAmount} onChange={(e) => setInflAmount(e.target.value)} placeholder="Monto actual ($)..." className="w-full p-6 bg-slate-50 rounded-[2rem] text-2xl font-black outline-none" />
+                   <div className="relative">
+                     <input type="number" value={inflRate} onChange={(e) => setInflRate(e.target.value)} placeholder="Inflación Mensual Est. (%)..." className="w-full p-6 bg-slate-50 rounded-[2rem] text-xl font-black outline-none" />
+                     <Percent size={20} className="absolute right-6 top-1/2 -translate-y-1/2 text-slate-300" />
+                   </div>
+                   <div className="p-8 bg-red-50 rounded-[2rem] border border-red-100 text-center">
+                     <p className="text-[10px] font-black text-red-600 uppercase mb-2 tracking-widest">Pérdida en 30 días</p>
+                     <p className="text-4xl font-black text-red-900">-${( (parseFloat(inflAmount)||0) * ((parseFloat(inflRate)||0)/100) ).toLocaleString('es-AR')}</p>
+                   </div>
+                 </div>
+               </section>
+            </div>
+          </div>
+        )}
+
+        {/* VISTA BLOG */}
+        {activeTab === 'blog' && (
+          <div className="max-w-4xl mx-auto py-12 space-y-12 animate-in fade-in duration-500 pb-20">
+             <h2 className="text-4xl font-black tracking-tighter uppercase italic text-slate-900 underline decoration-emerald-500 decoration-8 underline-offset-8 mb-12">Educación Financiera</h2>
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+               {[
+                 { t: '¿Plazo Fijo o Dólar MEP?', d: 'Análisis de tasas reales frente a la devaluación proyectada para el próximo trimestre.', c: 'Inversión', icon: <Landmark /> },
+                 { t: 'Estrategia de Cuotas', d: 'Cuándo conviene financiar y cómo calcular el punto de equilibrio con la inflación.', c: 'Ahorro', icon: <CreditCard /> },
+                 { t: 'Guía del Monotributista', d: 'Todo sobre escalas de facturación, retenciones de IVA y pagos mensuales.', c: 'Impuestos', icon: <Receipt /> },
+                 { t: 'Fondos de Emergencia', d: 'Cómo construir un colchón financiero sólido en una economía volátil.', c: 'Estrategia', icon: <ShieldCheck /> }
+               ].map((p, i) => (
+                 <article key={i} className="bg-white p-10 rounded-[3rem] border border-slate-200 hover:shadow-2xl transition-all group cursor-pointer border-b-4 hover:border-b-emerald-500">
+                   <div className="flex justify-between items-start mb-6">
+                    <span className="text-[9px] font-black text-emerald-600 uppercase bg-emerald-50 px-4 py-1.5 rounded-full tracking-widest">{p.c}</span>
+                    <div className="text-slate-200 group-hover:text-emerald-100 transition-colors">{p.icon}</div>
+                   </div>
+                   <h3 className="text-2xl font-black mb-4 group-hover:text-emerald-600 transition tracking-tighter italic uppercase">{p.t}</h3>
+                   <p className="text-slate-500 text-sm leading-relaxed mb-8">{p.d}</p>
+                   <button className="text-[10px] font-black uppercase tracking-widest flex items-center gap-2 group-hover:translate-x-2 transition-transform">
+                     Leer artículo <ChevronRight size={14} className="text-emerald-500" />
+                   </button>
+                 </article>
+               ))}
+             </div>
+          </div>
+        )}
+
+        {/* VISTA TÉRMINOS Y CONDICIONES */}
+        {activeTab === 'terms' && (
+          <div className="max-w-3xl mx-auto py-12 space-y-10 animate-in fade-in duration-500">
+            <div className="flex items-center gap-4 mb-6">
+              <FileText size={32} className="text-emerald-500" />
+              <h2 className="text-4xl font-black tracking-tighter uppercase italic text-slate-900">Términos y Condiciones</h2>
+            </div>
+            <div className="space-y-8 text-slate-600 leading-relaxed text-sm">
+              <section>
+                <h3 className="text-slate-900 font-black uppercase text-xs tracking-widest mb-4">1. Aceptación de los Términos</h3>
+                <p>Al acceder y utilizar B-FINANZA, usted acepta cumplir y estar sujeto a estos términos y condiciones. Si no está de acuerdo con alguna parte, le rogamos que no utilice nuestras herramientas.</p>
+              </section>
+              <section>
+                <h3 className="text-slate-900 font-black uppercase text-xs tracking-widest mb-4">2. Naturaleza de la Información</h3>
+                <p>B-FINANZA es una plataforma de herramientas de cálculo e información financiera. Los datos mostrados (incluyendo cotizaciones de dólar, tasas de interés y cálculos de inflación) son de carácter <strong>informativo y orientativo</strong>.</p>
+                <p className="mt-2">No constituimos una entidad financiera, casa de cambio, ni asesores de inversión. Los valores del dólar son obtenidos de fuentes públicas y APIs de terceros (DolarAPI), pudiendo presentar demoras o variaciones respecto al mercado real.</p>
+              </section>
+              <section>
+                <h3 className="text-slate-900 font-black uppercase text-xs tracking-widest mb-4">3. Limitación de Responsabilidad</h3>
+                <p>B-FINANZA no se responsabiliza por pérdidas financieras, decisiones de inversión erróneas o perjuicios derivados del uso de nuestras calculadoras. El usuario es el único responsable de verificar la información con fuentes oficiales o profesionales certificados antes de realizar cualquier transacción.</p>
+              </section>
+              <section>
+                <h3 className="text-slate-900 font-black uppercase text-xs tracking-widest mb-4">4. Propiedad Intelectual</h3>
+                <p>El diseño, código y marca B-FINANZA son propiedad de sus desarrolladores. Queda prohibida la reproducción total o parcial sin autorización previa.</p>
+              </section>
+            </div>
+            <button 
+              onClick={() => setActiveTab('home')}
+              className="inline-flex items-center gap-2 bg-slate-900 text-white px-8 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-emerald-600 transition-colors"
+            >
+              Volver al inicio <ArrowRightLeft size={14} />
+            </button>
+          </div>
+        )}
+
+        {/* VISTA POLÍTICA DE PRIVACIDAD */}
+        {activeTab === 'privacy' && (
+          <div className="max-w-3xl mx-auto py-12 space-y-10 animate-in fade-in duration-500">
+            <div className="flex items-center gap-4 mb-6">
+              <Lock size={32} className="text-emerald-500" />
+              <h2 className="text-4xl font-black tracking-tighter uppercase italic text-slate-900">Política de Privacidad</h2>
+            </div>
+            <div className="space-y-8 text-slate-600 leading-relaxed text-sm">
+              <section>
+                <h3 className="text-slate-900 font-black uppercase text-xs tracking-widest mb-4">1. Recopilación de Datos</h3>
+                <p>En B-FINANZA valoramos su privacidad. Actualmente, nuestra aplicación <strong>no solicita, recopila ni almacena datos personales</strong> (como nombres, correos o números de teléfono) para el uso de las calculadoras básicas.</p>
+              </section>
+              <section>
+                <h3 className="text-slate-900 font-black uppercase text-xs tracking-widest mb-4">2. Cookies y Almacenamiento Local</h3>
+                <p>Podemos utilizar el almacenamiento local del navegador (LocalStorage) únicamente para recordar sus preferencias de configuración (como el tipo de dólar seleccionado) y mejorar su experiencia de usuario.</p>
+              </section>
+              <section>
+                <h3 className="text-slate-900 font-black uppercase text-xs tracking-widest mb-4">3. Terceros</h3>
+                <p>Nuestra aplicación utiliza servicios externos para obtener cotizaciones. Estos servicios pueden recopilar datos técnicos anónimos (como dirección IP) según sus propias políticas de privacidad. No compartimos información con anunciantes.</p>
+              </section>
+              <section>
+                <h3 className="text-slate-900 font-black uppercase text-xs tracking-widest mb-4">4. Seguridad</h3>
+                <p>Implementamos medidas técnicas estándar para asegurar que la plataforma sea segura y libre de scripts maliciosos. Sin embargo, recordamos que ninguna transmisión por internet es 100% segura.</p>
+              </section>
+              <section>
+                <h3 className="text-slate-900 font-black uppercase text-xs tracking-widest mb-4">5. Contacto</h3>
+                <p>Para consultas sobre estas políticas, puede escribirnos a <strong>hola@b-finanza.com</strong>.</p>
+              </section>
+            </div>
+            <button 
+              onClick={() => setActiveTab('home')}
+              className="inline-flex items-center gap-2 bg-slate-900 text-white px-8 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-emerald-600 transition-colors"
+            >
+              Volver al inicio <ArrowRightLeft size={14} />
+            </button>
+          </div>
+        )}
+
+      </main>
+
+      {/* FOOTER */}
+      <footer className="bg-slate-900 text-white pt-24 pb-12 mt-20 border-t-8 border-emerald-500">
+        <div className="max-w-6xl mx-auto px-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-16 mb-20">
+             <div className="space-y-6">
+                <div className="flex items-center space-x-2">
+                  <TrendingUp className="text-emerald-400" size={32} />
+                  <span className="text-2xl font-black tracking-tighter uppercase italic">B-FINANZA</span>
+                </div>
+                <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest leading-loose">
+                  Herramientas de precisión para el mercado argentino. <br/>
+                  Datos auditados y calculadoras de alto impacto.
+                </p>
+                <div className="flex gap-4">
+                  <div className="w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center hover:bg-emerald-600 transition-colors cursor-pointer"><Mail size={18}/></div>
+                  <div className="w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center hover:bg-emerald-600 transition-colors cursor-pointer"><Globe size={18}/></div>
+                </div>
+             </div>
+             <div>
+               <h5 className="font-black text-[11px] uppercase tracking-[0.3em] text-emerald-400 mb-8 border-l-2 border-emerald-500 pl-4">Mapa de Sitio</h5>
+               <ul className="space-y-4 text-slate-500 font-black uppercase text-xs tracking-widest">
+                 <li onClick={() => setActiveTab('home')} className="cursor-pointer hover:text-white transition flex items-center gap-2 group"><ChevronRight size={12} className="opacity-0 group-hover:opacity-100 transition-all" /> Dashboard Live</li>
+                 <li onClick={() => setActiveTab('tools')} className="cursor-pointer hover:text-white transition flex items-center gap-2 group"><ChevronRight size={12} className="opacity-0 group-hover:opacity-100 transition-all" /> Calculadoras</li>
+                 <li onClick={() => setActiveTab('blog')} className="cursor-pointer hover:text-white transition flex items-center gap-2 group"><ChevronRight size={12} className="opacity-0 group-hover:opacity-100 transition-all" /> Academia</li>
+               </ul>
+             </div>
+             <div>
+               <h5 className="font-black text-[11px] uppercase tracking-[0.3em] text-emerald-400 mb-8 border-l-2 border-emerald-500 pl-4">Legal & Soporte</h5>
+               <ul className="space-y-4 text-slate-500 font-black uppercase text-xs tracking-widest">
+                 <li onClick={() => setActiveTab('terms')} className="hover:text-white transition cursor-pointer flex items-center gap-2 group"><ChevronRight size={12} className="opacity-0 group-hover:opacity-100 transition-all" /> Términos y Condiciones</li>
+                 <li onClick={() => setActiveTab('privacy')} className="hover:text-white transition cursor-pointer flex items-center gap-2 group"><ChevronRight size={12} className="opacity-0 group-hover:opacity-100 transition-all" /> Política de Privacidad</li>
+                 <li className="hover:text-white transition cursor-pointer flex items-center gap-2 group"><ChevronRight size={12} className="opacity-0 group-hover:opacity-100 transition-all" /> Fuentes de Datos</li>
+               </ul>
+             </div>
+          </div>
+          <div className="pt-10 border-t border-slate-800 flex flex-col md:flex-row justify-between items-center gap-4 text-[9px] text-slate-600 font-black uppercase tracking-[0.4em]">
+            <span>© {new Date().getFullYear()} B-FINANZA AR - SYNC LIVE</span>
+            <span className="bg-slate-800 px-4 py-1.5 rounded-full text-emerald-500 font-bold uppercase">Argentina</span>
+          </div>
+        </div>
+      </footer>
+
+      <style>{`
+        @keyframes marquee {
+          0% { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+        .animate-marquee-fast {
+          display: inline-block;
+          animation: marquee 25s linear infinite;
+        }
+        input::-webkit-outer-spin-button, 
+        input::-webkit-inner-spin-button {
+          -webkit-appearance: none;
+          margin: 0;
+        }
+        ::selection {
+          background: #10b981;
+          color: white;
+        }
+        ::-webkit-scrollbar { width: 10px; }
+        ::-webkit-scrollbar-track { background: #f8fafc; }
+        ::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; border: 2px solid #f8fafc; }
+        ::-webkit-scrollbar-thumb:hover { background: #cbd5e1; }
+        
+        .animate-in {
+          animation: fadeIn 0.4s ease-out;
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
+    </div>
+  );
+};
+
+export default App;
+
